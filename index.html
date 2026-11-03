@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>漢字50問テスト</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&family=Klee+One:wght@600&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+<style>
+/* 1画面完結：上にヘッダー、まん中に問題パネル、下に操作ボタン。すりガラスのパネルをグラデーションの上に置く */
+:root{
+  --ink:#22304a;
+  --sub:#56657f;
+  --glass:rgba(255,255,255,.58);
+  --glass-strong:rgba(255,255,255,.82);
+  --edge:rgba(255,255,255,.85);
+  --shadow:0 10px 30px rgba(40,60,100,.16);
+  --red:#e03e36;      /* 赤ペン */
+  --write:#e2574c;    /* 書きモード */
+  --read:#2e6fd6;     /* 読みモード */
+  --okuri:#14936a;    /* 送りがなモード */
+  --ok:#14936a;
+  --ng:#d63a3a;
+  --round:'M PLUS Rounded 1c','Hiragino Maru Gothic ProN','Meiryo',sans-serif;
+  --brush:'Klee One','UD Digi Kyokasho N-R','YuKyokasho','Yu Mincho',serif;
+  color-scheme:light;
+}
+html,body{height:100%}
+body{
+  margin:0;font-family:var(--round);color:var(--ink);
+  background-color:#ffe2b8;
+  background-image:linear-gradient(135deg,#ffe2b8 0%,#ffd0dc 34%,#cdf1e2 68%,#bcdcff 100%);
+  overflow:hidden;
+  display:flex;justify-content:center;align-items:center;
+  box-sizing:border-box;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+  -webkit-tap-highlight-color:transparent;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+button{font-family:inherit;color:inherit}
+#app{width:100%;max-width:980px;height:100%;padding-block:12px;display:flex;flex-direction:column;min-height:0}
+.screen{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px;animation:fade .35s ease}
+@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes pop{0%{opacity:0;transform:scale(.6)}70%{transform:scale(1.08)}100%{opacity:1;transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+.glass{
+  background:var(--glass);
+  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+  border:1px solid var(--edge);border-radius:22px;box-shadow:var(--shadow);
+}
+.btn{
+  border:none;border-radius:14px;padding:.7em 1.2em;font-size:clamp(15px,2.4vh,20px);font-weight:800;
+  background:var(--glass-strong);box-shadow:0 4px 12px rgba(40,60,100,.14);cursor:pointer;
+  transition:transform .15s,box-shadow .15s,background .15s,opacity .15s;
+}
+.btn:hover{transform:translateY(-2px);box-shadow:0 8px 18px rgba(40,60,100,.2)}
+.btn:active{transform:translateY(1px)}
+.btn:focus-visible,.opt:focus-visible,.chk:focus-within{outline:3px solid #1d4fa8;outline-offset:2px}
+.btn:disabled{opacity:.35;cursor:default;transform:none;box-shadow:none}
+.btn.main{color:#fff;background:var(--mc,#2e6fd6)}
+
+/* ---------- ホーム ---------- */
+.home{justify-content:center;align-items:center}
+.home h1{margin:0;font-size:clamp(28px,6vh,52px);font-weight:800;letter-spacing:.06em;text-align:center}
+.home .lead{margin:0;color:var(--sub);font-size:clamp(14px,2.2vh,18px);text-align:center}
+.modes{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;width:100%;margin-top:6px}
+.mode{display:flex;flex-direction:column;gap:8px;padding:18px;align-items:flex-start}
+.mode .tag{font-size:13px;font-weight:800;color:#fff;background:var(--mc);border-radius:999px;padding:.2em .8em;letter-spacing:.08em}
+.mode h2{margin:0;font-size:clamp(20px,3.4vh,28px)}
+.mode .sample{font-family:var(--brush);font-size:clamp(18px,3vh,26px);color:var(--sub);line-height:1.4}
+.mode .sample u{text-decoration-color:var(--red);text-decoration-thickness:3px;text-underline-offset:4px}
+.mode .sample .bx{display:inline-block;width:1em;height:1em;border:2px solid var(--sub);vertical-align:-.1em;margin:0 1px}
+.mode .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto;width:100%}
+.mode .row .btn{flex:1;white-space:nowrap}
+.mode .retry{font-size:clamp(13px,2vh,16px);color:var(--mc);background:#fff}
+
+/* ---------- 問題画面のヘッダー ---------- */
+.bar{display:flex;align-items:center;gap:10px;padding:8px 10px}
+.bar .home-btn{padding:.45em .9em;font-size:clamp(13px,2vh,16px)}
+.bar .mname{font-weight:800;font-size:clamp(15px,2.5vh,20px);color:var(--mc);white-space:nowrap}
+.bar .retry-mark{font-size:12px;font-weight:800;color:#fff;background:var(--ng);border-radius:999px;padding:.15em .7em;white-space:nowrap}
+.prog{flex:1;height:10px;border-radius:99px;background:rgba(255,255,255,.7);overflow:hidden;min-width:40px}
+.prog i{display:block;height:100%;background:var(--mc);border-radius:99px;transition:width .3s}
+.count{font-weight:800;font-size:clamp(15px,2.5vh,20px);font-variant-numeric:tabular-nums;white-space:nowrap}
+
+.panel{flex:1;min-height:0;position:relative;display:flex;padding:clamp(12px,2.5vh,26px)}
+
+.foot{display:flex;gap:10px;justify-content:space-between}
+.foot .btn{flex:1;max-width:240px;padding:.75em .6em}
+.foot .btn.main{flex:1.4;max-width:320px}
+
+/* ---------- ① 書き ---------- */
+.wgrid{flex:1;min-height:0;display:grid;grid-template-columns:auto auto;justify-content:center;gap:clamp(14px,3vw,36px);column-gap:clamp(32px,5vw,80px);align-items:center}
+.clues{list-style:none;margin:0;padding:0 0 0 6px;display:flex;flex-direction:column;gap:clamp(14px,4.2vh,42px);font-size:clamp(20px,min(6vh,4.6vw),50px);width:11em}
+.clues li{font-size:1em;font-weight:700;line-height:1.9;display:flex;gap:.5em;align-items:baseline}
+.clues li::before{content:attr(data-n);font-size:.55em;color:#fff;background:var(--write);border-radius:50%;width:1.6em;height:1.6em;display:inline-grid;place-items:center;flex:none;transform:translateY(-.26em);padding-bottom:.22em}
+.clues li ruby.bk{ruby-position:over}
+.clues li ruby.bk rt{font-size:.5em;font-weight:800;color:var(--ink);line-height:1;padding-bottom:.25em}
+.blank{display:inline-block;width:1.05em;height:1.05em;border:3px solid var(--ink);border-radius:4px;vertical-align:-.15em;margin:0 .06em;background:rgba(255,255,255,.7);position:relative;overflow:hidden}
+.blank.on{border-color:var(--red);background:#fff}
+.blank.on::after{content:attr(data-k);position:absolute;inset:0;display:grid;place-items:center;font-family:var(--brush);color:var(--red);font-size:.9em;line-height:1;animation:pop .35s ease}
+/* □の中の字は、書き順と同じ線のデータでかく（字の上下のずれが出ない） */
+.blank.svg::after{content:none}
+.blank svg{position:absolute;inset:0;width:100%;height:100%;animation:pop .35s ease}
+.blank path{fill:none;stroke:var(--red);stroke-width:7;stroke-linecap:round;stroke-linejoin:round}
+.wans{display:flex;flex-direction:column;align-items:center;gap:clamp(8px,1.8vh,16px)}
+.bigbox{
+  --s:min(42vh,32vw,300px);
+  width:var(--s);height:var(--s);border:4px solid var(--ink);border-radius:10px;background:#fff;position:relative;
+  display:grid;place-items:center;
+  background-image:
+    linear-gradient(to right,transparent calc(50% - 1px),rgba(34,48,74,.22) calc(50% - 1px),rgba(34,48,74,.22) calc(50% + 1px),transparent calc(50% + 1px)),
+    linear-gradient(to bottom,transparent calc(50% - 1px),rgba(34,48,74,.22) calc(50% - 1px),rgba(34,48,74,.22) calc(50% + 1px),transparent calc(50% + 1px));
+}
+.bigbox span{font-family:var(--brush);font-size:calc(var(--s)*.78);line-height:1;color:var(--red);animation:pop .4s ease}
+/* 書き順アニメーション */
+.kanim{position:absolute;inset:0;display:grid;place-items:center}
+.kanim svg{width:94%;height:94%}
+.kanim path{fill:none;stroke:var(--red);stroke-width:5.5;stroke-linecap:round;stroke-linejoin:round}
+.wrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center}
+.replay{padding:.45em .9em;font-size:clamp(14px,2.2vh,18px)}
+.kcount{font-weight:800;color:var(--red);font-size:clamp(15px,2.4vh,20px);font-variant-numeric:tabular-nums;min-width:4.8em;text-align:center}
+.credit{margin:0;font-size:11px;color:var(--sub)}
+
+/* チェック（書けた・読めた） */
+.chk{display:inline-flex;align-items:center;gap:.5em;font-size:clamp(18px,3vh,26px);font-weight:800;cursor:pointer;user-select:none;
+  background:#fff;border-radius:16px;padding:.35em .9em .35em .5em;box-shadow:0 4px 12px rgba(40,60,100,.14);animation:pop .35s ease}
+.chk input{position:absolute;opacity:0;width:1px;height:1px}
+.chk .sq{width:1.5em;height:1.5em;border:3px solid var(--sub);border-radius:8px;display:grid;place-items:center;transition:background .15s,border-color .15s}
+.chk .sq svg{width:1.1em;height:1.1em;opacity:0;transition:opacity .15s}
+.chk input:checked + .sq{background:var(--ok);border-color:var(--ok)}
+.chk input:checked + .sq svg{opacity:1}
+.wbelow{position:relative;display:flex;flex-direction:column;align-items:center;gap:clamp(8px,1.8vh,16px)}
+.wbelow.wait .wrow,.wbelow.wait .chk{visibility:hidden;animation:none}
+.wbelow .chk-wait{position:absolute;inset:0;justify-content:center}
+.chk-wait{font-size:clamp(14px,2.2vh,18px);color:var(--sub);min-height:2.6em;display:flex;align-items:center;text-align:center}
+
+/* ---------- ② 読み ---------- */
+.rwrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:clamp(10px,3vh,30px)}
+.word{display:flex;align-items:flex-end;font-family:var(--brush);font-size:clamp(56px,min(17vh,15vw),150px);line-height:1}
+.col{display:flex;flex-direction:column;align-items:center}
+.col .rt{font-family:var(--round);font-size:.3em;font-weight:800;height:1.3em;line-height:1.3em;white-space:nowrap;margin-bottom:.15em;color:var(--ink)}
+.col .rt .yomi{color:var(--red);animation:fade .3s ease;display:inline-block;min-width:2.2em;text-align:center}
+.col .rt .sp{display:inline-block;min-width:2.2em}
+/* （ ）の読みが漢字より長くても、字の間を広げない（答えを出しても言葉が横に動かない） */
+.col.tg .rt{width:0;display:flex;justify-content:center}
+.col.tg .rt .yomi,.col.tg .rt .sp{flex:none}
+.col.tg .ch{text-decoration:underline;text-decoration-color:var(--red);text-decoration-thickness:.06em;text-underline-offset:.12em}
+.rbtns{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:center;min-height:3.2em}
+.say{display:inline-flex;align-items:center;gap:.4em}
+.say svg{width:1.2em;height:1.2em}
+.rnote{color:var(--sub);font-size:clamp(14px,2.2vh,18px);margin:0}
+
+/* ---------- ③ 送りがな ---------- */
+.owrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:clamp(12px,3.5vh,34px)}
+.osent{font-size:clamp(26px,min(7vh,6.4vw),58px);font-weight:700;text-align:center;line-height:1.4}
+.osent b{color:var(--okuri);border-bottom:4px solid var(--okuri);padding:0 .1em}
+.opts{display:flex;gap:clamp(10px,2vw,22px);flex-wrap:wrap;justify-content:center}
+.opt{
+  font-family:var(--brush);font-size:clamp(30px,min(8vh,7vw),64px);min-width:3.4em;padding:.25em .6em;border-radius:18px;border:3px solid transparent;
+  background:#fff;box-shadow:0 6px 16px rgba(40,60,100,.15);cursor:pointer;transition:transform .15s,box-shadow .15s,border-color .15s,background .15s;position:relative
+}
+.opt:hover:not(:disabled){transform:translateY(-3px);box-shadow:0 10px 22px rgba(40,60,100,.2)}
+.opt:disabled{cursor:default}
+.opt.right{border-color:var(--ok);background:#e6f7ef}
+.opt.wrong{border-color:var(--ng);background:#fdeaea}
+.opt.dim{opacity:.45}
+.mark{position:absolute;top:-.55em;right:-.4em;font-family:var(--round);font-size:.5em;font-weight:800;color:#fff;width:1.6em;height:1.6em;border-radius:50%;display:grid;place-items:center;animation:pop .3s ease}
+.right .mark{background:var(--ok)}
+.wrong .mark{background:var(--ng)}
+.ofb{min-height:1.6em;font-size:clamp(18px,3vh,26px);font-weight:800;margin:0}
+.ofb.ok{color:var(--ok)}
+.ofb.ng{color:var(--ng)}
+
+/* ---------- 結果 ---------- */
+.result{justify-content:center;align-items:center}
+.rcard{width:100%;max-width:720px;display:flex;flex-direction:column;align-items:center;gap:clamp(8px,2vh,16px);padding:clamp(16px,4vh,36px)}
+.rcard .rm{font-weight:800;color:var(--mc);font-size:clamp(16px,2.6vh,22px)}
+.score{font-size:clamp(48px,12vh,104px);font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+.score small{font-size:.38em;color:var(--sub)}
+.msg{margin:0;font-size:clamp(17px,2.8vh,24px);font-weight:700;text-align:center}
+.misslist{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;max-height:22vh;overflow:auto;padding:4px}
+.misslist span{font-family:var(--brush);font-size:clamp(18px,3vh,26px);background:#fff;border:2px solid var(--ng);color:var(--ng);border-radius:10px;padding:0 .4em}
+.rbtnrow{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;width:100%}
+.rbtnrow .btn{flex:1;min-width:160px;max-width:260px}
+
+/* ---------- リセット・おめでとう・確認 ---------- */
+.bar .reset-btn{padding:.45em .9em;font-size:clamp(13px,2vh,16px);color:var(--ng);background:#fff;white-space:nowrap}
+.mode .left{font-size:clamp(13px,2vh,16px);font-weight:800;color:var(--mc)}
+.congrats{justify-content:center;align-items:center}
+.ccard{width:100%;max-width:720px;display:flex;flex-direction:column;align-items:center;gap:clamp(10px,2.4vh,20px);padding:clamp(20px,5vh,44px);text-align:center}
+.ccard .rm{font-weight:800;color:var(--mc);font-size:clamp(16px,2.6vh,22px)}
+.ccard h2{margin:0;font-size:clamp(34px,min(11vh,12vw),96px);white-space:nowrap;font-weight:800;color:var(--mc);letter-spacing:.06em;animation:pop .5s ease}
+.ccard .cmsg{margin:0;font-size:clamp(17px,2.8vh,24px);font-weight:700}
+.dlg{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:16px;background:rgba(34,48,74,.35);animation:fade .2s ease}
+.dbox{width:100%;max-width:440px;display:flex;flex-direction:column;gap:14px;padding:clamp(18px,4vh,28px);background:var(--glass-strong)}
+.dbox h3{margin:0;font-size:clamp(19px,3vh,24px);color:var(--ng)}
+.dbox p{margin:0;font-size:clamp(15px,2.3vh,18px);line-height:1.7}
+.dbtns{display:flex;gap:10px;justify-content:flex-end}
+.dbtns .btn{flex:1;max-width:180px;white-space:nowrap;padding-inline:.6em}
+.btn.danger{color:#fff;background:var(--ng)}
+
+/* ---------- スマホ ---------- */
+@media (max-width:720px){
+  #app{padding-block:8px}
+  .home h1{font-size:clamp(24px,8.5vw,40px)}
+  .modes{grid-template-columns:1fr;gap:10px}
+  .mode{padding:12px 14px;gap:4px}
+  .mode .sample{display:none}
+  .wgrid{grid-template-columns:1fr;grid-template-rows:auto 1fr;gap:10px;align-items:start}
+  .clues{gap:8px;padding-top:18px}
+  .clues{font-size:clamp(18px,4.2vh,30px);width:min(11.5em,100%);justify-self:center}
+  .bigbox{--s:min(30vh,58vw,240px)}
+  .wans{align-self:center}
+  .foot .btn{font-size:15px;padding:.7em .3em}
+  .bar{gap:6px;padding:6px 8px}
+  .bar .mname{display:none}
+  .bar .home-btn,.bar .reset-btn{padding:.45em .6em;white-space:nowrap}
+  .bar .retry-mark{display:none}
+}
+@media (max-height:520px){
+  .home .lead{display:none}
+  .mode .sample{display:none}
+}
+</style>
+
+</head>
+<body>
+<div id="app">
+  <!-- ホーム -->
+  <section class="screen home" id="home">
+    <h1>漢字50問テスト</h1>
+    <p class="lead">4年生で習う漢字。ノートに書いてから「こたえを見る」をおそう。</p>
+    <div class="modes" id="modes"></div>
+    <p class="credit">書き順データ：KanjiVG（Ulrich Apel, CC BY-SA 3.0）</p>
+  </section>
+
+  <!-- 問題 -->
+  <section class="screen" id="quiz" hidden>
+    <div class="bar glass">
+      <button class="btn home-btn" id="toHome" type="button">モードをえらぶ</button>
+      <span class="mname" id="mname"></span>
+      <span class="retry-mark" id="retryMark" hidden>まちがえた問題</span>
+      <div class="prog"><i id="progBar"></i></div>
+      <span class="count" id="count"></span>
+      <button class="btn reset-btn" id="reset" type="button">リセット</button>
+    </div>
+    <div class="panel glass" id="panel"></div>
+    <div class="foot">
+      <button class="btn" id="prev" type="button">◀ まえ</button>
+      <button class="btn main" id="check" type="button">こたえを見る</button>
+      <button class="btn" id="next" type="button">つぎ ▶</button>
+    </div>
+  </section>
+
+  <!-- 結果 -->
+  <section class="screen result" id="result" hidden>
+    <div class="rcard glass">
+      <div class="rm" id="rMode"></div>
+      <div class="score" id="rScore"></div>
+      <p class="msg" id="rMsg"></p>
+      <div class="misslist" id="rMiss"></div>
+      <div class="rbtnrow">
+        <button class="btn main" id="rRetry" type="button">まちがえた問題だけ</button>
+        <button class="btn" id="rAgain" type="button">もう一度ぜんぶ</button>
+        <button class="btn" id="rHome" type="button">モードをえらぶ</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- おめでとう（全問チェック） -->
+  <section class="screen congrats" id="congrats" hidden>
+    <div class="ccard glass">
+      <div class="rm" id="cMode"></div>
+      <h2>おめでとう！</h2>
+      <p class="cmsg" id="cMsg"></p>
+      <div class="rbtnrow">
+        <button class="btn" id="cReset" type="button">リセット</button>
+        <button class="btn main" id="cHome" type="button">モードをえらぶ</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- リセットの確認 -->
+<div class="dlg" id="dlg" hidden>
+  <div class="dbox glass" role="dialog" aria-modal="true" aria-labelledby="dTitle">
+    <h3 id="dTitle">リセットしますか？</h3>
+    <p id="dMsg"></p>
+    <div class="dbtns">
+      <button class="btn" id="dCancel" type="button">キャンセル</button>
+      <button class="btn danger" id="dOk" type="button">OK</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   問題データ（ここを書きかえれば問題を変えられます）
+   ========================================================= */
+
+/* ① 書き：k＝答えの漢字、c＝問題（□が答えの場所）。2〜3文 */
+const WRITE = [
+  {k:'参',c:['□{さん}加する','□{さん}考にする','お宮□{まい}り']},
+  {k:'旗',c:['□{はた}をふる','国□{き}をかかげる','校□{き}']},
+  {k:'司',c:['□{し}会者','図書館の□{し}書','上□{し}に話す']},
+  {k:'焼',c:['魚を□{や}く','夕□{や}け','□{や}き肉']},
+  {k:'倉',c:['□{そう}庫を開ける','米□{ぐら}','□{くら}にしまう']},
+  {k:'功',c:['成□{こう}する','□{こう}労者','年の□{こう}']},
+  {k:'英',c:['□{えい}語を習う','□{えい}会話','□{えい}国の首都']},
+  {k:'刷',c:['印□{さつ}する','□{す}りたての新聞','ポスターを□{す}る']},
+  {k:'省',c:['農林水産□{しょう}','言葉を□{はぶ}く','反□{せい}する']},
+  {k:'各',c:['□{かく}地の天気','□{かく}自で用意する','□{かっ}国の代表']},
+  {k:'孫',c:['祖父と□{まご}','□{まご}の顔を見る','子□{そん}に伝える']},
+  {k:'億',c:['一□{おく}人','十□{おく}円','百□{おく}年']},
+  {k:'兆',c:['一□{ちょう}円','十□{ちょう}円','百□{ちょう}円']},
+  {k:'祝',c:['楽しい□{しゅく}日','お□{いわ}いの会','誕生日を□{いわ}う']},
+  {k:'側',c:['部屋の内□{がわ}','右□{がわ}を歩く','両□{がわ}']},
+  {k:'念',c:['残□{ねん}に思う','記□{ねん}写真','□{ねん}を入れる']},
+  {k:'説',c:['□{せつ}明を聞く','小□{せつ}を読む','□{せつ}明書']},
+  {k:'令',c:['号□{れい}をかける','命□{れい}する','□{れい}和']},
+  {k:'典',c:['国語辞□{てん}','百科事□{てん}','式□{てん}に出る']},
+  {k:'賀',c:['年□{が}状を出す','□{が}正','祝□{が}会']},
+  {k:'種',c:['動物の□{しゅ}類','花の□{たね}をまく','□{しゅ}目']},
+  {k:'梅',c:['桜と□{うめ}','□{うめ}の花','□{うめ}ぼし']},
+  {k:'極',c:['南□{きょく}に行く','北□{きょく}星','□{きょく}地']},
+  {k:'札',c:['名□{ふだ}をつける','千円□{さつ}','改□{さつ}口']},
+  {k:'希',c:['□{き}望する','明るい□{き}望','□{き}少な動物']},
+  {k:'副',c:['□{ふく}大臣','□{ふく}会長','□{ふく}作用']},
+  {k:'結',c:['□{けっ}果が出る','ひもを□{むす}ぶ','□{むす}び目']},
+  {k:'熱',c:['□{ねつ}が高い','□{あつ}いお茶','□{ねっ}心に学ぶ']},
+  {k:'材',c:['取□{ざい}する','□{ざい}料を集める','木□{ざい}']},
+  {k:'案',c:['□{あん}内する','いい□{あん}を出す','名□{あん}']},
+  {k:'録',c:['記□{ろく}をとる','□{ろく}音する','付□{ろく}']},
+  {k:'然',c:['自□{ぜん}を守る','天□{ねん}記念物','当□{ぜん}のこと']},
+  {k:'昨',c:['□{さく}年のこと','□{さく}日','□{さく}夜']},
+  {k:'飛',c:['空を□{と}ぶ','紙ひこうきを□{と}ばす','□{ひ}行場']},
+  {k:'臣',c:['総理大□{じん}','大□{じん}になる','家□{しん}']},
+  {k:'課',c:['放□{か}後','□{か}題を出す','日□{か}']},
+  {k:'束',c:['約□{そく}する','花□{たば}をおくる','かみを□{たば}ねる']},
+  {k:'径',c:['円の直□{けい}','半□{けい}5cmの円','直□{けい}と半□{けい}']},
+  {k:'季',c:['□{き}節の食べ物','四□{き}','□{き}語']},
+  {k:'械',c:['工場の機□{かい}','機□{かい}を動かす','器□{かい}体そう']},
+  {k:'辺',c:['□{あた}りを見る','海□{べ}','この□{へん}']},
+  {k:'固',c:['土を□{かた}める','□{かた}いパン','□{こ}体']},
+  {k:'治',c:['国を□{おさ}める','けがが□{なお}る','政□{じ}']},
+  {k:'静',c:['□{しず}かな歌','安□{せい}にする','□{しず}岡県']},
+  {k:'周',c:['池の□{まわ}り','一□{しゅう}する','円□{しゅう}']},
+  {k:'覚',c:['目を□{さ}ます','名前を□{おぼ}える','感□{かく}']},
+  {k:'笑',c:['くすくす□{わら}う','□{え}顔','大□{わら}い']},
+  {k:'欠',c:['皿が□{か}ける','□{けっ}席する','□{けっ}点を直す']},
+  {k:'借',c:['本を□{か}りる','□{か}り物','□{しゃっ}金']},
+  {k:'議',c:['会□{ぎ}に出る','□{ぎ}長をえらぶ','□{ぎ}題']},
+  {k:'標',c:['目□{ひょう}を立てる','□{ひょう}本','道路□{ひょう}識']},
+  {k:'管',c:['□{かん}楽器','水道□{かん}','血□{かん}']},
+  {k:'隊',c:['□{たい}列をととのえる','たんけん□{たい}','音楽□{たい}']},
+  {k:'養',c:['栄□{よう}をとる','体力を□{やしな}う','休□{よう}する']},
+  {k:'不',c:['□{ふ}安になる','□{ふ}思議な話','□{ふ}便']},
+  {k:'満',c:['□{まん}足する','□{まん}員電車','水が□{み}ちる']},
+  {k:'芽',c:['草の□{め}','□{め}が出る','発□{が}する']},
+  {k:'験',c:['理科の実□{けん}','試□{けん}','体□{けん}学習']},
+  {k:'漁',c:['□{ぎょ}業の町','□{りょう}師','□{ぎょ}船']},
+  {k:'機',c:['飛行□{き}','□{き}会','洗たく□{き}']},
+  {k:'特',c:['□{とく}集記事','□{とく}別','□{とっ}急電車']},
+  {k:'康',c:['健□{こう}な体','健□{こう}しんだん','健□{こう}第一']},
+  {k:'量',c:['水の分□{りょう}','大□{りょう}','重さを□{はか}る']},
+  {k:'達',c:['新聞配□{たつ}','友□{だち}','上□{たつ}する']},
+  {k:'順',c:['□{じゅん}番を待つ','書き□{じゅん}','□{じゅん}調に進む']},
+  {k:'努',c:['□{ど}力が実る','練習に□{つと}める','□{ど}力家']},
+  {k:'競',c:['□{きょう}走する','□{きょう}争','速さを□{きそ}う']},
+  {k:'飯',c:['ご□{はん}を食べる','朝ご□{はん}','夕□{はん}の時間']},
+  {k:'児',c:['□{じ}童館へ行く','育□{じ}','園□{じ}']},
+  {k:'底',c:['水の□{そこ}','海□{てい}','□{そこ}力']}
+];
+
+/* ② 読み：w＝言葉、i＝答える字の場所（0から）、n＝答える字の数（書かないときは1字）、r＝（ ）に出る読み、s＝音声で読む言葉、v＝聞き取りにくい言葉だけ、声に読ませる文字（書かないときは s） */
+const READ = [
+  {w:'決勝戦',i:2,r:'せん',s:'けっしょうせん'},
+  {w:'投票',i:0,n:2,r:'とうひょう',s:'とうひょう'},
+  {w:'郡部',i:0,n:2,r:'ぐんぶ',s:'ぐんぶ'},
+  {w:'塩',i:0,r:'しお',s:'しお'},
+  {w:'たんけん隊',i:4,r:'たい',s:'たんけんたい'},
+  {w:'富む',i:0,r:'と',s:'とむ'},
+  {w:'卒業',i:0,n:2,r:'そつぎょう',s:'そつぎょう'},
+  {w:'沖',i:0,r:'おき',s:'おき'},
+  {w:'送付',i:0,n:2,r:'そうふ',s:'そうふ'},
+  {w:'兵士',i:0,r:'へい',s:'へいし'},
+  {w:'血管',i:0,n:2,r:'けっかん',s:'けっかん'},
+  {w:'交わり',i:0,r:'まじ',s:'まじわり'},
+  {w:'愛犬',i:0,n:2,r:'あいけん',s:'あいけん'},
+  {w:'徒歩',i:0,n:2,r:'とほ',s:'とほ'},
+  {w:'商店街',i:0,n:3,r:'しょうてんがい',s:'しょうてんがい'},
+  {w:'衣服',i:0,n:2,r:'いふく',s:'いふく'},
+  {w:'金貨',i:0,n:2,r:'きんか',s:'きんか'},
+  {w:'給食',i:0,n:2,r:'きゅうしょく',s:'きゅうしょく'},
+  {w:'置く',i:0,r:'お',s:'おく'},
+  {w:'夫人',i:0,n:2,r:'ふじん',s:'ふじん'},
+  {w:'けいさつ官',i:4,r:'かん',s:'けいさつかん'},
+  {w:'夕飯',i:0,n:2,r:'ゆうはん',s:'ゆうはん'},
+  {w:'包帯',i:0,n:2,r:'ほうたい',s:'ほうたい'},
+  {w:'灯台',i:0,n:2,r:'とうだい',s:'とうだい'},
+  {w:'協力',i:0,n:2,r:'きょうりょく',s:'きょうりょく'},
+  {w:'以上',i:0,n:2,r:'いじょう',s:'いじょう'},
+  {w:'国産',i:0,n:2,r:'こくさん',s:'こくさん'},
+  {w:'目標',i:0,n:2,r:'もくひょう',s:'もくひょう'},
+  {w:'交差点',i:0,n:3,r:'こうさてん',s:'こうさてん'},
+  {w:'うれし泣き',i:3,r:'な',s:'うれしなき'},
+  {w:'調節',i:0,n:2,r:'ちょうせつ',s:'ちょうせつ'},
+  {w:'三輪車',i:0,n:3,r:'さんりんしゃ',s:'さんりんしゃ'},
+  {w:'風景',i:0,n:2,r:'ふうけい',s:'ふうけい'},
+  {w:'軍歌',i:0,n:2,r:'ぐんか',s:'ぐんか'},
+  {w:'水の底',i:2,r:'そこ',s:'みずのそこ'},
+  {w:'児童館',i:0,n:3,r:'じどうかん',s:'じどうかん'},
+  {w:'無理',i:0,n:2,r:'むり',s:'むり'},
+  {w:'単位',i:0,n:2,r:'たんい',s:'たんい',v:'たん い'},
+  {w:'会議',i:0,n:2,r:'かいぎ',s:'かいぎ'},
+  {w:'群れる',i:0,r:'む',s:'むれる'},
+  {w:'省く',i:0,r:'はぶ',s:'はぶく'},
+  {w:'散らす',i:0,r:'ち',s:'ちらす'},
+  {w:'栄える',i:0,r:'さか',s:'さかえる'},
+  {w:'挙げる',i:0,r:'あ',s:'あげる'},
+  {w:'争う',i:0,r:'あらそ',s:'あらそう'},
+  {w:'浅い',i:0,r:'あさ',s:'あさい'},
+  {w:'願う',i:0,r:'ねが',s:'ねがう'},
+  {w:'積もる',i:0,r:'つ',s:'つもる'},
+  {w:'養う',i:0,r:'やしな',s:'やしなう'},
+  {w:'浴びる',i:0,r:'あ',s:'あびる'}
+];
+
+/* ③ 送りがな：s＝文（【 】の中が答える言葉）、o＝選択肢（1つめが正しい。画面では順番をまぜて出す） */
+const OKURI = [
+  {s:'この【あたり】',o:['辺り','辺たり']},
+  {s:'土を【かためる】',o:['固める','固る','固ためる']},
+  {s:'やさしく【つつむ】',o:['包む','包つむ']},
+  {s:'国を【おさめる】',o:['治める','治る','治さめる']},
+  {s:'【しずか】な夜',o:['静か','静ずか']},
+  {s:'池の【まわり】',o:['周り','周わり']},
+  {s:'目を【さます】',o:['覚ます','覚す','覚さます']},
+  {s:'くすくす【わらう】',o:['笑う','笑らう']},
+  {s:'皿が【かける】',o:['欠ける','欠る']},
+  {s:'本を【かりる】',o:['借りる','借る']},
+  {s:'きまりを【あらためる】',o:['改める','改る','改ためる']},
+  {s:'一位を【あらそう】',o:['争う','争そう']},
+  {s:'最後まで【たたかう】',o:['戦う','戦かう']},
+  {s:'町が【さかえる】',o:['栄える','栄る','栄かえる']},
+  {s:'体力を【やしなう】',o:['養う','養なう']},
+  {s:'雪が【つもる】',o:['積もる','積る']},
+  {s:'工場で【はたらく】',o:['働く','働らく']},
+  {s:'助けを【もとめる】',o:['求める','求る','求とめる']},
+  {s:'パンが【やける】',o:['焼ける','焼る']},
+  {s:'山が【つらなる】',o:['連なる','連る','連らなる']},
+  {s:'【はじめて】知る',o:['初めて','初て','初じめて']}
+];
+
+/* =========================================================
+   設定
+   ========================================================= */
+const MODES = {
+  write:{name:'漢字を書く',short:'書き',tag:'書き',color:'var(--write)',data:WRITE,
+         desc:'3つの文に共通する漢字を書こう',
+         sample:'鳥の<span class="bx"></span>'},
+  okuri:{name:'送りがなクイズ',short:'送りがな',tag:'送りがな',color:'var(--okuri)',data:OKURI,
+         desc:'正しい送りがなをえらぼう',
+         sample:'目をさます → 覚ます'}
+};
+
+/* =========================================================
+   音（ピンポン・ブブー）・音声・紙吹雪
+   ========================================================= */
+let AC=null;
+function ac(){
+  try{
+    AC=AC||new (window.AudioContext||window.webkitAudioContext)();
+    if(AC.state==='suspended')AC.resume();
+  }catch(e){AC=null}
+  return AC;
+}
+function tone(f,start,dur,type,vol){
+  const c=ac();if(!c)return;
+  const o=c.createOscillator(),g=c.createGain(),t=c.currentTime+start;
+  o.type=type;o.frequency.setValueAtTime(f,t);
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(vol,t+0.015);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(g).connect(c.destination);o.start(t);o.stop(t+dur+0.05);
+}
+function pinpon(){tone(1319,0,.55,'sine',.35);tone(1047,.22,.9,'sine',.35)}
+function bubuu(){tone(150,0,.28,'square',.12);tone(150,.34,.45,'square',.12)}
+
+let JA_VOICE=null;
+function pickVoice(){
+  try{
+    const vs=speechSynthesis.getVoices();
+    JA_VOICE=vs.find(v=>/^ja/i.test(v.lang)&&/Google|Kyoko|Otoya|Nanami|Haruka/i.test(v.name))||vs.find(v=>/^ja/i.test(v.lang))||null;
+  }catch(e){}
+}
+if('speechSynthesis' in window){pickVoice();speechSynthesis.onvoiceschanged=pickVoice}
+function speak(text,rate){
+  if(!('speechSynthesis' in window))return;
+  try{
+    speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(text);
+    u.lang='ja-JP';u.rate=rate||.85;u.pitch=1;
+    if(JA_VOICE)u.voice=JA_VOICE;
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+/* 読みの音声：ひらがなのままだと読みまちがえる声があるので、次の言葉は漢字の言葉を読ませる
+   ・小さい字（ゃゅょっ）が入る言葉（「がっしょう」→「がつしよう」）
+   ・「ん」のあとに あいうえお・やゆよ が続く言葉（「たんい」→「たに」）
+   v を書いた問題は、v をそのまま読ませる（例：単位は「たん い」と少し間をあける）。vr を書いた問題は、その速さで読ませる（ふつうは .85） */
+function sayText(q){if(q.v)return q.v;return /[ゃゅょっャュョッ]|ん[あいうえおやゆよ]/.test(q.s)?q.w:q.s}
+function party(){
+  if(typeof confetti!=='function')return;
+  const end=Date.now()+1600;
+  (function f(){
+    confetti({particleCount:6,angle:60,spread:60,origin:{x:0,y:.7}});
+    confetti({particleCount:6,angle:120,spread:60,origin:{x:1,y:.7}});
+    if(Date.now()<end)requestAnimationFrame(f);
+  })();
+}
+
+/* =========================================================
+   まちがえた問題の記録（このブラウザだけに残る）
+   ========================================================= */
+const KEY='kanji50-wrong-v1';
+function loadWrong(){
+  try{const v=JSON.parse(localStorage.getItem(KEY)||'{}');return v&&typeof v==='object'?v:{}}catch(e){return {}}
+}
+let WRONG=loadWrong();
+function saveWrong(){try{localStorage.setItem(KEY,JSON.stringify(WRONG))}catch(e){}}
+
+/* チェックが入った問題（できた問題）の記録。次からは出さない。モードごとに「リセット」で消せる */
+const DKEY='kanji50-done-v1';
+function loadDone(){
+  try{const v=JSON.parse(localStorage.getItem(DKEY)||'{}');return v&&typeof v==='object'?v:{}}catch(e){return {}}
+}
+let DONE=loadDone();
+/* 「書き」の問題を70字に入れかえた（2026-11-03）。前の問題の番号で残っている記録を一度だけ消す */
+try{
+  if(localStorage.getItem('kanji50-write-ver')!=='7'){
+    delete DONE.write;saveDone();
+    delete WRONG.write;saveWrong();
+    localStorage.setItem('kanji50-write-ver','7');
+  }
+}catch(e){}
+/* 「読み」の問題を24問に入れかえた（2026-11-03）。前の問題の番号で残っている記録を一度だけ消す */
+try{
+  if(localStorage.getItem('kanji50-read-ver')!=='4'){
+    delete DONE.read;saveDone();
+    delete WRONG.read;saveWrong();
+    localStorage.setItem('kanji50-read-ver','4');
+  }
+}catch(e){}
+/* 「送りがな」の問題を21問に入れかえた（2026-11-03）。前の問題の番号で残っている記録を一度だけ消す */
+try{
+  if(localStorage.getItem('kanji50-okuri-ver')!=='7'){
+    delete DONE.okuri;saveDone();
+    delete WRONG.okuri;saveWrong();
+    localStorage.setItem('kanji50-okuri-ver','7');
+  }
+}catch(e){}
+function saveDone(){try{localStorage.setItem(DKEY,JSON.stringify(DONE))}catch(e){}}
+function isDone(mode,i){return (DONE[mode]||[]).includes(i)}
+function setDone(mode,i,on){
+  const a=(DONE[mode]||[]).filter(x=>x!==i);
+  if(on)a.push(i);
+  DONE[mode]=a;saveDone();
+}
+function remaining(mode){return MODES[mode].data.map((_,i)=>i).filter(i=>!isDone(mode,i))}
+
+/* =========================================================
+   画面
+   ========================================================= */
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function show(id){['home','quiz','result','congrats'].forEach(s=>$(s).hidden=(s!==id))}
+const CHECK_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg>';
+const SPEAK_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></svg>';
+
+function renderHome(){
+  $('modes').innerHTML=Object.entries(MODES).map(([key,m])=>{
+    const w=(WRONG[key]||[]).filter(i=>!isDone(key,i)).length;
+    const left=remaining(key).length;
+    return `<div class="mode glass" style="--mc:${m.color}">
+      <span class="tag">${m.tag}</span>
+      <h2>${m.name}</h2>
+      <div class="sample">${m.sample}</div>
+      <div style="color:var(--sub);font-size:clamp(13px,2vh,16px)">${m.desc}（${m.data.length}問）</div>
+      <div class="left">${left?`のこり ${left}問`:'ぜんぶクリア！'}</div>
+      <div class="row">
+        <button class="btn main" type="button" data-start="${key}">はじめる</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+$('modes').addEventListener('click',e=>{
+  const s=e.target.closest('[data-start]'),r=e.target.closest('[data-retry]');
+  ac();
+  if(s)start(s.dataset.start,null);
+  if(r)start(r.dataset.retry,WRONG[r.dataset.retry]);
+});
+
+/* ---------- 問題の進め方 ---------- */
+let S=null;
+function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+
+function start(mode,indices){
+  const m=MODES[mode];
+  /* チェック済みの問題はのぞいて、ランダムな順に出す */
+  indices=(indices||[]).filter(i=>!isDone(mode,i));
+  const list=shuffle(indices.length?indices:remaining(mode));
+  if(!list.length){congrats(mode);return}
+  S={mode,list,pos:0,retry:!!indices.length,open:{},ok:{},picked:{},order:{}};
+  if(mode==='okuri')list.forEach(i=>S.order[i]=shuffle(m.data[i].o));
+  document.documentElement.style.setProperty('--mc',m.color);
+  $('mname').textContent=m.name;
+  $('retryMark').hidden=!S.retry;
+  show('quiz');
+  render();
+}
+
+function render(){
+  const m=MODES[S.mode],idx=S.list[S.pos],q=m.data[idx],n=S.list.length;
+  $('count').textContent=`${S.pos+1} / ${n}`;
+  $('progBar').style.width=((S.pos+1)/n*100)+'%';
+  $('prev').disabled=S.pos===0;
+  $('next').textContent='つぎ ▶';
+  const panel=$('panel');
+
+  if(S.mode==='write'){
+    const open=!!S.open[idx];
+    const clues=q.c.map((c,j)=>`<li data-n="${j+1}"><span>${esc(c).replace(/□\{(.+?)\}/g,(_,y)=>`<ruby class="bk"><span class="blank${open?' on':''}" data-k="${q.k}"></span><rt>${y}</rt></ruby>`)}</span></li>`).join('');
+    panel.innerHTML=`<div class="wgrid">
+      <ul class="clues">${clues}</ul>
+      <div class="wans">
+        <div class="bigbox" aria-label="答えのわく">${open?'<div class="kanim" id="kanim"></div>':''}</div>
+        <div class="wbelow${open?'':' wait'}"><div class="wrow"><span class="kcount" id="kcount"></span><button class="btn replay" type="button" id="replay">もう一度、書く</button></div>${chk('書けた！',idx)}${open?'':'<div class="chk-wait">ノートに書いたら<br>「こたえを見る」</div>'}</div>
+      </div></div>`;
+    $('check').hidden=false;$('check').disabled=open;
+    if(open){drawStrokes(q.k);fillBlanks(q.k);$('replay').onclick=()=>drawStrokes(q.k)}
+    else{ANIM++;loadStrokes(q.k)}
+  }
+
+  if(S.mode==='read'){
+    const open=!!S.open[idx];
+    /* 答える字（i から n 字）は1つにまとめて、その上に（ ）を出す */
+    const ws=[...q.w],tn=q.n||1;
+    const cells=[];
+    for(let j=0;j<ws.length;){
+      if(j===q.i){cells.push({ch:ws.slice(j,j+tn).join(''),tg:true});j+=tn}
+      else{cells.push({ch:ws[j],tg:false});j++}
+    }
+    const chars=cells.map(({ch,tg})=>{
+      const rt=tg?(open?`（<span class="yomi">${q.r}</span>）`:'（<span class="sp"></span>）'):'';
+      return `<div class="col${tg?' tg':''}"><div class="rt">${rt}</div><div class="ch">${ch}</div></div>`;
+    }).join('');
+    panel.innerHTML=`<div class="rwrap">
+      <div class="word" aria-label="${esc(q.w)}">${chars}</div>
+      <div class="rbtns">
+        ${open?`<button class="btn say" type="button" id="say">${SPEAK_SVG}もう一度きく</button>${chk('読めた！',idx)}`
+              :'<p class="rnote">線の字の読みを（ ）に書こう</p>'}
+      </div></div>`;
+    if(open)$('say').onclick=()=>speak(sayText(q),q.vr);
+    $('check').hidden=false;$('check').disabled=open;
+  }
+
+  if(S.mode==='okuri'){
+    const picked=S.picked[idx];
+    const sent=esc(q.s).replace(/【(.+?)】/,'<b>$1</b>');
+    const right=q.o[0];
+    const opts=S.order[idx].map(o=>{
+      let cls='',mk='';
+      if(picked!==undefined){
+        if(o===right){cls='right';mk='<span class="mark">○</span>'}
+        else if(o===picked){cls='wrong';mk='<span class="mark">×</span>'}
+        else cls='dim';
+      }
+      return `<button class="opt ${cls}" type="button" data-o="${esc(o)}" ${picked!==undefined?'disabled':''}>${esc(o)}${mk}</button>`;
+    }).join('');
+    let fb='';
+    if(picked!==undefined)fb=picked===right?'<p class="ofb ok">せいかい！</p>':`<p class="ofb ng">正しくは「${esc(right)}」</p>`;
+    else fb='<p class="ofb" style="color:var(--sub)">正しい送りがなをえらぼう</p>';
+    panel.innerHTML=`<div class="owrap">
+      <div class="osent">${sent}</div>
+      <div class="opts" id="opts">${opts}</div>${fb}</div>`;
+    $('check').hidden=true;
+  }
+}
+
+/* 書き順（KanjiVG のデータをネットから読みこむ。読みこめないときは字を表示） */
+const KVG={};
+let ANIM=0;
+function loadStrokes(k){
+  if(!KVG[k]){
+    const url='https://cdn.jsdelivr.net/gh/KanjiVG/kanjivg@master/kanji/'+k.codePointAt(0).toString(16).padStart(5,'0')+'.svg';
+    KVG[k]=fetch(url).then(r=>{if(!r.ok)throw new Error('load');return r.text()}).then(t=>{
+      const d=new DOMParser().parseFromString(t,'image/svg+xml');
+      const ps=[...d.querySelectorAll('path')].filter(p=>/-s\d+$/.test(p.getAttribute('id')||'')).map(p=>p.getAttribute('d'));
+      if(!ps.length)throw new Error('empty');
+      return ps;
+    }).catch(()=>null);
+  }
+  return KVG[k];
+}
+/* □の中に答えの字をかく（線のデータが読みこめないときは、ふつうの字のまま） */
+function fillBlanks(k){
+  loadStrokes(k).then(ps=>{
+    if(!ps)return;
+    document.querySelectorAll('#panel .blank.on').forEach(b=>{
+      if(b.dataset.k!==k)return;
+      b.classList.add('svg');
+      b.innerHTML='<svg viewBox="0 0 109 109">'+ps.map(d=>'<path d="'+d+'"/>').join('')+'</svg>';
+    });
+  });
+}
+function drawStrokes(k){
+  const box=$('kanim');if(!box)return;
+  const my=++ANIM;
+  box.innerHTML='';
+  const cnt=$('kcount');if(cnt)cnt.textContent='';
+  loadStrokes(k).then(ps=>{
+    if(my!==ANIM||!box.isConnected)return;
+    if(!ps){
+      box.innerHTML=`<span>${k}</span>`;
+      const rb=$('replay');if(rb)rb.style.visibility='hidden';
+      return;
+    }
+    const NS='http://www.w3.org/2000/svg';
+    const svg=document.createElementNS(NS,'svg');
+    svg.setAttribute('viewBox','0 0 109 109');
+    box.appendChild(svg);
+    const els=ps.map(d=>{const p=document.createElementNS(NS,'path');p.setAttribute('d',d);svg.appendChild(p);return p});
+    let t=0;
+    els.forEach((p,i)=>{
+      const L=p.getTotalLength()+1;
+      p.style.strokeDasharray=L+' '+L;
+      p.style.strokeDashoffset=L;
+      const dur=Math.max(300,L*10);
+      p.animate([{strokeDashoffset:L},{strokeDashoffset:0}],{duration:dur,delay:t,fill:'both',easing:'ease-in-out'});
+      setTimeout(()=>{if(my===ANIM&&cnt)cnt.textContent=(i+1)+' / '+els.length+'画'},t);
+      t+=dur+200;
+    });
+  });
+}
+
+function chk(label,idx){
+  return `<label class="chk"><input type="checkbox" id="ok-${idx}" ${S.ok[idx]?'checked':''}><span class="sq">${CHECK_SVG}</span>${label}</label>`;
+}
+
+/* チェックボックス */
+$('panel').addEventListener('change',e=>{
+  if(e.target.type!=='checkbox')return;
+  const idx=S.list[S.pos];
+  S.ok[idx]=e.target.checked;
+  setDone(S.mode,idx,e.target.checked);
+  if(e.target.checked)pinpon();
+});
+/* 送りがなの選択 */
+$('panel').addEventListener('click',e=>{
+  const b=e.target.closest('.opt');
+  if(!b||S.mode!=='okuri')return;
+  const idx=S.list[S.pos],q=OKURI[idx];
+  if(S.picked[idx]!==undefined)return;
+  S.picked[idx]=b.dataset.o;
+  S.ok[idx]=b.dataset.o===q.o[0];
+  if(S.ok[idx])setDone(S.mode,idx,true);
+  S.ok[idx]?pinpon():bubuu();
+  render();
+});
+/* こたえを見る */
+$('check').addEventListener('click',()=>{
+  ac();
+  const idx=S.list[S.pos];
+  if(S.open[idx])return;
+  S.open[idx]=true;
+  render();
+  if(S.mode==='read')speak(sayText(READ[idx]),READ[idx].vr);
+});
+$('prev').addEventListener('click',()=>{if(S.pos>0){S.pos--;render()}});
+$('next').addEventListener('click',()=>{
+  if(S.pos<S.list.length-1){S.pos++;render()}
+  else finish();
+});
+$('toHome').addEventListener('click',()=>{try{speechSynthesis.cancel()}catch(e){}renderHome();show('home')});
+
+/* ---------- 結果 ---------- */
+function finish(){
+  try{speechSynthesis.cancel()}catch(e){}
+  const m=MODES[S.mode];
+  const wrong=S.list.filter(i=>!S.ok[i]);
+  const n=S.list.length,good=n-wrong.length;
+  WRONG[S.mode]=wrong;saveWrong();
+  if(!remaining(S.mode).length){congrats(S.mode);return}
+  /* まだチェックがついていない問題を、そのままつづけて出す（ぜんぶチェックがついたら、おめでとう画面） */
+  start(S.mode,null);return;
+  $('result').style.setProperty('--mc',m.color);
+  $('rMode').textContent=m.name+(S.retry?'（まちがえた問題）':'');
+  $('rScore').innerHTML=`${good}<small> / ${n}</small>`;
+  let msg;
+  if(!wrong.length)msg='ぜんぶできた！すばらしい！';
+  else if(good/n>=.8)msg='あと少し！まちがえた問題をやってみよう。';
+  else msg='まちがえた問題を、もう一度れんしゅうしよう。';
+  $('rMsg').textContent=msg;
+  $('rMiss').innerHTML=wrong.map(i=>`<span>${esc(label(S.mode,i))}</span>`).join('');
+  $('rRetry').hidden=!wrong.length;
+  show('result');
+  if(!wrong.length)party();
+}
+function label(mode,i){
+  if(mode==='write')return WRITE[i].k;
+  if(mode==='read')return READ[i].w;
+  return OKURI[i].o[0];
+}
+$('rRetry').addEventListener('click',()=>start(S.mode,WRONG[S.mode]));
+$('rAgain').addEventListener('click',()=>start(S.mode,null));
+$('rHome').addEventListener('click',()=>{renderHome();show('home')});
+
+/* ---------- おめでとう（そのモードの問題にぜんぶチェックがついた） ---------- */
+let CMODE=null;
+function congrats(mode){
+  try{speechSynthesis.cancel()}catch(e){}
+  CMODE=mode;
+  const m=MODES[mode];
+  $('congrats').style.setProperty('--mc',m.color);
+  $('cMode').textContent=m.name;
+  $('cMsg').textContent=`${m.data.length}問 ぜんぶクリア！よくがんばったね。`;
+  show('congrats');
+  party();
+}
+$('cHome').addEventListener('click',()=>{renderHome();show('home')});
+
+/* ---------- リセット（確認してから、そのモードのチェックを消す） ---------- */
+let DMODE=null;
+function askReset(mode){
+  DMODE=mode;
+  const m=MODES[mode];
+  $('dMsg').innerHTML=`「${esc(m.name)}」のチェックを<b>ぜんぶ消して</b>、${m.data.length}問にもどします。<br>消したチェックは、もとにもどせません。`;
+  $('dlg').hidden=false;
+  $('dCancel').focus();
+}
+function closeDlg(){$('dlg').hidden=true;DMODE=null}
+$('reset').addEventListener('click',()=>{if(S)askReset(S.mode)});
+$('cReset').addEventListener('click',()=>{if(CMODE)askReset(CMODE)});
+$('dCancel').addEventListener('click',closeDlg);
+$('dlg').addEventListener('click',e=>{if(e.target===$('dlg'))closeDlg()});
+$('dOk').addEventListener('click',()=>{
+  const mode=DMODE;closeDlg();
+  if(!mode)return;
+  DONE[mode]=[];saveDone();
+  WRONG[mode]=[];saveWrong();
+  start(mode,null);
+});
+
+/* キーボード（←→） */
+document.addEventListener('keydown',e=>{
+  if(!$('dlg').hidden){if(e.key==='Escape')closeDlg();return}
+  if($('quiz').hidden)return;
+  if(e.key==='ArrowRight')$('next').click();
+  if(e.key==='ArrowLeft'&&!$('prev').disabled)$('prev').click();
+});
+
+renderHome();
+</script>
+</body>
+</html>
